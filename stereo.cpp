@@ -30,11 +30,10 @@ using namespace std;
 typedef SDoublePlane SDoubleMatrix;
 
 //Function for Homographic transformation
-SDoublePlane projective_transformation(const SDoublePlane &input, const SDoubleMatrix &homography)
+void projective_transformation(const SDoublePlane &input, const SDoubleMatrix &homography, SDoubleMatrix &transformedImageWithoutInterpolation, SDoubleMatrix &transformedImageWithInterpolation)
 {
 double interpolated;
 int rows = input.rows(), cols = input.cols(),i,j,k;
-SDoublePlane output(rows,cols);
 
 for(i=0;i<rows;i++)
 {
@@ -52,7 +51,8 @@ for(i=0;i<rows;i++)
 int t2=x[1];
 		if(x[0] <= 0 || x[1] <= 0 || x[0] >= rows || x[1] >= cols)
 		{
-			output[i][j] = 0;
+			transformedImageWithoutInterpolation[i][j] = 0;
+			transformedImageWithInterpolation[i][j] = 0;
 			continue;
 		}
 		else
@@ -72,15 +72,16 @@ int t2=x[1];
 
 		interpolated = (input[r1][c1])*((x[1]-c1)*(r2-x[0]))/((r2-r1)*(c2-c1)) + (input[r2][c1])*(((x[0]-r1)*(c2-x[1]))/((r2-r1)*(c2-c1))) +
 		(input[r1][c1])*(((c2-x[1])*(r2-x[0]))/((r2-r1)*(c2-c1))) + (input[r2][c2])*((x[0]-r1)*(x[1]-c1))/((r2-r1)*(c2-c1));
-		output[i][j] =interpolated;
+
+		//We won't apply transformation to one image map
+		transformedImageWithoutInterpolation[i][j] = input[r1][c1];
+
+		//Apply projective trasnformation to another image map which will avoid jagged boundaries in the output image
+		transformedImageWithInterpolation[i][j] =interpolated;
        }
 	}
 }
-
-return output;
 }
-
-
 
 
 int main(int argc, char *argv[])
@@ -118,7 +119,18 @@ int main(int argc, char *argv[])
   
   SDoublePlane image1 = SImageIO::read_png_file(input_filename1.c_str());
 
-  SDoublePlane projected = projective_transformation(image1, inv_proj_matrix);
-  SImageIO::write_png_file(output_filename.c_str(), projected, projected, projected);
-	return 0;
+  int rows = image1.rows();
+  int cols = image1.cols();
+
+  SDoublePlane outputWithInterpolation(rows,cols);
+  SDoublePlane outputWithoutInterpolation(rows,cols);
+
+  string noninterpolatedImageName = "noninterpolated_" + output_filename;
+  string interpolatedImageName = "interpolated_" + output_filename;
+
+  projective_transformation(image1, inv_proj_matrix, outputWithoutInterpolation, outputWithInterpolation);
+  SImageIO::write_png_file(noninterpolatedImageName.c_str(), outputWithoutInterpolation, outputWithoutInterpolation, outputWithoutInterpolation);
+  SImageIO::write_png_file(interpolatedImageName.c_str(), outputWithInterpolation, outputWithInterpolation, outputWithInterpolation);
+
+   return 0;
 }
